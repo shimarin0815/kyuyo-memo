@@ -112,6 +112,14 @@ nav.tabs button.on { color: var(--accent); font-weight: 700; }
 .shift-edit input { width: 100%; min-width: 0; padding: 6px; }
 .shift-edit .lbl { font-size: 12px; color: var(--sub); }
 .ocr-list { font-size: 14px; max-height: 40vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+/* 全画面のシート（下の画面が透けて重ならないように） */
+.overlay.full { background: var(--bg); align-items: stretch; }
+.overlay.full .sheet { max-height: none; height: 100%; border-radius: 0; background: var(--bg); padding-top: calc(16px + env(safe-area-inset-top)); }
+.step { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+.step-h { font-weight: 700; font-size: 17px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.step-n { background: var(--accent); color: #fff; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; flex: none; }
+.prompt-box { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; font-size: 14px; line-height: 1.6; -webkit-user-select: text; user-select: text; }
+.done-msg { margin-top: 8px; padding: 10px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-weight: 700; text-align: center; }
 .hidden { display: none !important; }
 </style>
 </head>
@@ -134,7 +142,7 @@ nav.tabs button.on { color: var(--accent); font-weight: 700; }
         <button id="tcBtn" style="flex:1">📝 タイムカードを貼り付け</button>
         <button id="clearMonth" class="danger">この月を空にする</button>
       </div>
-      <input type="file" id="ocrFile" accept="image/*" class="hidden">
+      <input type="file" id="ocrFile" accept="image/*" multiple class="hidden">
     </div>
 
     <div class="card">
@@ -262,21 +270,32 @@ nav.tabs button.on { color: var(--accent); font-weight: 700; }
 </div>
 
 <!-- タイムカードの文字を貼り付け -->
-<div class="overlay" id="tcOverlay">
+<div class="overlay full" id="tcOverlay">
   <div class="sheet">
-    <div class="row between"><h2 style="margin:0">タイムカードを貼り付け</h2><button id="tcClose">閉じる</button></div>
-    <p class="muted" id="tcMonthNote"></p>
-    <ol class="muted" style="padding-left:20px; margin:6px 0">
-      <li>下のボタンでお願い文をコピー</li>
-      <li>Claudeアプリにタイムカードの写真とお願い文を送る</li>
-      <li>返ってきた文字をコピーして、下の枠に貼り付け</li>
-    </ol>
-    <button id="tcPrompt" style="width:100%">Claudeへのお願い文をコピー</button>
-    <textarea id="tcText" style="margin-top:8px" placeholder="例：&#10;3 21:28 8:21&#10;4 19:40 8:13&#10;27 有休"></textarea>
-    <button id="tcParse" class="primary" style="width:100%; margin-top:6px">読み込む</button>
-    <div id="tcResultBox" class="hidden" style="margin-top:10px">
-      <div class="ocr-list" id="tcList"></div>
-      <button id="tcApply" class="primary" style="width:100%; margin-top:6px">カレンダーに反映する</button>
+    <div class="row between" style="margin-bottom:4px"><h2 style="margin:0">タイムカードを貼り付け</h2><button id="tcClose">閉じる</button></div>
+    <p class="muted" id="tcMonthNote" style="margin:0 0 12px"></p>
+
+    <div class="step">
+      <div class="step-h"><span class="step-n">1</span>お願い文をコピーする</div>
+      <div class="prompt-box" id="tcPromptText"></div>
+      <button id="tcPrompt" class="primary" style="width:100%; margin-top:8px">お願い文をコピー</button>
+      <div class="done-msg hidden" id="tcPromptDone">✓ コピーしました。次は 2 へ</div>
+      <div class="muted hidden" id="tcPromptFail" style="margin-top:6px">自動でコピーできませんでした。上の文を長押しして「すべてを選択」→「コピー」してください。</div>
+    </div>
+
+    <div class="step">
+      <div class="step-h"><span class="step-n">2</span>Claudeアプリで送る</div>
+      <div class="muted">Claudeアプリを開き、タイムカードの写真を添付して、コピーした文を貼り付けて送ります。返事の文字（「3 21:28 8:21」のような行）を長押ししてコピーしたら、ここに戻ってきます。</div>
+    </div>
+
+    <div class="step">
+      <div class="step-h"><span class="step-n">3</span>返事を貼り付ける</div>
+      <textarea id="tcText" placeholder="ここを長押しして「ペースト」&#10;&#10;例：&#10;3 21:28 8:21&#10;27 有休"></textarea>
+      <button id="tcParse" class="primary" style="width:100%; margin-top:8px">読み込む</button>
+      <div id="tcResultBox" class="hidden" style="margin-top:10px">
+        <div class="ocr-list" id="tcList"></div>
+        <button id="tcApply" class="primary" style="width:100%; margin-top:8px">カレンダーに反映する</button>
+      </div>
     </div>
   </div>
 </div>
@@ -680,13 +699,12 @@ document.querySelectorAll('[data-k]').forEach(inp => inp.onchange = () => { stat
 $('addShift').onclick = () => { state.settings.shifts.push({ name: '新勤務', start: '09:00', end: '18:00', brStart: '12:00', brMin: 60 }); save(); renderSettings(); };
 $('exportCopy').onclick = async () => {
   const text = JSON.stringify({ app: 'kyuyo-memo', v: 1, savedAt: new Date().toISOString(), data: state });
-  try {
-    await navigator.clipboard.writeText(text);
+  if (await copyText(text)) {
     $('backupNote').textContent = 'コピーしました。メモアプリなどに貼り付けて保管してください。';
     $('exportCopy').textContent = '✓ コピーしました';
     setTimeout(() => { $('exportCopy').textContent = 'ひかえをコピー'; }, 3000);
     alert('ひかえをコピーしました。');
-  } catch (e) {
+  } else {
     $('importBox').classList.remove('hidden'); $('importText').value = text; $('importText').select();
     $('backupNote').textContent = '自動でコピーできませんでした。下の文字を全部選んでコピーしてください。';
   }
@@ -725,22 +743,25 @@ function loadScript(src) {
 $('ocrBtn').onclick = () => { $('ocrFile').value = ''; $('ocrFile').click(); };
 $('ocrClose').onclick = () => $('ocrOverlay').classList.remove('show');
 $('ocrFile').onchange = async e => {
-  const file = e.target.files[0]; if (!file) return;
+  const files = [...e.target.files]; if (!files.length) return;
   $('ocrOverlay').classList.add('show'); $('ocrResultBox').classList.add('hidden');
   const status = t => { $('ocrStatus').textContent = t; };
+  const n = files.length; let idx = 0;
   try {
     status('準備中…（はじめての時は読み取り用のデータを取り込むので30秒ほどかかります）');
     if (!window.Tesseract) await loadScript(TESS_URL);
-    const img = await fileToImage(file);
-    const prep = preprocess(img);
     const worker = await Tesseract.createWorker('jpn', 1, {
-      logger: m => { if (m.status === 'recognizing text') status(`読み取り中… ${Math.round(m.progress * 100)}%`); },
+      logger: m => { if (m.status === 'recognizing text') status(`読み取り中…${n > 1 ? ` ${idx + 1}/${n}枚目` : ''} ${Math.round(m.progress * 100)}%`); },
     });
     await worker.setParameters({ tessedit_pageseg_mode: '11' });
-    const { data } = await worker.recognize(prep.canvas);
+    const results = [];
+    for (idx = 0; idx < n; idx++) {
+      const prep = preprocess(await fileToImage(files[idx]));
+      const { data } = await worker.recognize(prep.canvas);
+      results.push(parseCalendar(data, prep));
+    }
     await worker.terminate();
-    const found = parseCalendar(data, prep);
-    showOcrResult(found);
+    showOcrResult(results);
   } catch (err) {
     console.error(err);
     status('読み取れませんでした。電波のある場所で、もう一度ためしてください。');
@@ -892,64 +913,62 @@ function parseCalendar(data, prep) {
       if (!usedWords.has(wi) && !inWideChip(w.bbox) && /^\d{1,2}$/.test(w.text) && +w.text >= 1 && +w.text <= 31) dayNums.push({ v: +w.text, bb: w.bbox });
     });
   }
-  // 日付を行→列の順に並べ、前月・翌月の分を見分ける
-  dayNums.sort((a, b) => (a.bb.y0 - b.bb.y0) || (a.bb.x0 - b.bb.x0));
-  const rowsArr = [];
-  for (const d of dayNums) {
-    const h = d.bb.y1 - d.bb.y0;
-    const r = rowsArr.find(r => Math.abs(r.y - d.bb.y0) < h * 0.8);
-    if (r) r.items.push(d); else rowsArr.push({ y: d.bb.y0, items: [d] });
-  }
-  const ordered = [];
-  rowsArr.sort((a, b) => a.y - b.y).forEach(r => r.items.sort((a, b) => a.bb.x0 - b.bb.x0).forEach(d => ordered.push(d)));
-  let offset = ordered.length && ordered[0].v > 20 ? -1 : 0, prev = null;
-  for (const d of ordered) {
-    if (prev !== null && d.v < prev - 3) offset++;
-    d.month = offset; prev = d.v;
-  }
-  // 横7列のマス目として、勤務の列と、同じ段の読めた日付から日にちを割り出す
+  // 横7列のマス目として考える。選んでいる月の1日の曜日から「何段目・何列目なら何日か」が決まるので、
+  // 読めた日付のうち、その位置と矛盾しないものだけを手がかりに段の高さを求める（読み違いの数字を捨てるため）
   const colW = prep.W / 7;
   const colOf = bb => Math.min(6, Math.floor(((bb.x0 + bb.x1) / 2) / colW));
-  const last = new Date(cur.y, cur.m, 0).getDate(), prevLast = new Date(cur.y, cur.m - 1, 0).getDate();
-  const serial = d => d.month < 0 ? d.v - prevLast : d.month > 0 ? last + d.v : d.v;
-  const rowList = [];
-  for (const d of ordered) {
-    const r = rowList.find(r => Math.abs(r.y - d.bb.y0) < (d.bb.y1 - d.bb.y0) * 0.8);
-    if (r) r.items.push(d); else rowList.push({ y: d.bb.y0, items: [d] });
-  }
-  const gaps = rowList.slice(1).map((r, i) => r.y - rowList[i].y).sort((a, b) => a - b);
-  const rowGap = gaps.length ? gaps[Math.floor(gaps.length / 2)] : prep.H;
-  const result = {};
-  for (const l of labels) {
-    let row = null;
-    for (const r of rowList) if (r.y <= l.bb.y0 + 4 && l.bb.y0 - r.y < rowGap * 0.9) row = r;
-    if (!row) continue;
-    const c = colOf(l.bb);
-    // 同じ段で、いちばん近い列の日付を基準にする
-    const ref = row.items.slice().sort((a, b) => Math.abs(colOf(a.bb) - c) - Math.abs(colOf(b.bb) - c))[0];
-    const day = serial(ref) + (c - colOf(ref.bb));
-    if (day >= 1 && day <= last && !result[day]) result[day] = l.name;
-  }
-  window.__ocrDebug = { labels, days: ordered };
-  // 1日がどの列にあるか（選んだ月と合っているかの確認用）
-  const votes = [0, 0, 0, 0, 0, 0, 0];
-  for (const d of ordered) if (d.month === 0) votes[(((colOf(d.bb) - (d.v - 1)) % 7) + 7) % 7]++;
-  const best = Math.max(...votes);
-  return { days: result, firstCol: best > 0 ? votes.indexOf(best) : null };
-}
-function showOcrResult(res) {
-  const found = res.days;
+  const last = new Date(cur.y, cur.m, 0).getDate();
   const wd1 = new Date(cur.y, cur.m - 1, 1).getDay();
+  let startCol = wd1, anchors = [];
+  for (const sc of [wd1, (wd1 + 6) % 7]) { // 日曜始まり・月曜始まり
+    const a = dayNums.filter(d => d.v <= last && (d.v - 1 + sc) % 7 === colOf(d.bb)).map(d => ({ r: Math.floor((d.v - 1 + sc) / 7), y: d.bb.y0 }));
+    if (a.length > anchors.length) { anchors = a; startCol = sc; }
+  }
+  const mismatch = dayNums.length >= 3 && anchors.length < Math.max(2, dayNums.length * 0.25);
+  const median = arr => { const s = arr.slice().sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; };
+  const result = {};
+  if (anchors.length && !mismatch) {
+    const byRow = {};
+    for (const a of anchors) (byRow[a.r] = byRow[a.r] || []).push(a.y);
+    const rowsY = Object.entries(byRow).map(([r, ys]) => ({ r: +r, y: median(ys) }));
+    let h;
+    if (rowsY.length >= 2) {
+      const ratios = [];
+      for (let i = 0; i < rowsY.length; i++) for (let j = i + 1; j < rowsY.length; j++) ratios.push((rowsY[j].y - rowsY[i].y) / (rowsY[j].r - rowsY[i].r));
+      h = median(ratios);
+    } else {
+      // 段が1つしか分からないときは、勤務の帯が並ぶ間隔から段の高さを推定する
+      const ys = [...new Set(labels.map(l => Math.round(l.bb.y0 / 20) * 20))].sort((a, b) => a - b);
+      const gaps = ys.slice(1).map((y, i) => y - ys[i]).filter(g => g > colW * 0.8);
+      h = median(gaps) || colW * 1.6;
+    }
+    const y0 = median(rowsY.map(o => o.y - o.r * h));
+    for (const l of labels) {
+      const r = Math.floor((l.bb.y0 - y0 + h * 0.1) / h);
+      const day = r * 7 + colOf(l.bb) - startCol + 1;
+      if (day >= 1 && day <= last && !result[day]) result[day] = l.name;
+    }
+  }
+  window.__ocrDebug = { labels, anchors, startCol };
+  return { days: result, mismatch };
+}
+// 複数枚の結果をまとめる（選んでいる月と並びが合わないスクショは使わない）
+function showOcrResult(results) {
+  const last = new Date(cur.y, cur.m, 0).getDate();
+  const found = {}, skipped = [];
+  results.forEach((res, i) => {
+    if (res.mismatch) { skipped.push(i + 1); return; }
+    for (const [d, name] of Object.entries(res.days)) if (+d <= last && !found[d]) found[d] = name;
+  });
   ocrFound = found;
   const ds = Object.keys(found).map(Number).sort((a, b) => a - b);
-  const last = new Date(cur.y, cur.m, 0).getDate();
+  const skipNote = skipped.length ? `（${skipped.join('・')}枚目は${cur.m}月ではないようなので使いませんでした）` : '';
   if (!ds.length) {
-    $('ocrStatus').textContent = '勤務が見つかりませんでした。Googleカレンダーを「月」表示にしたスクショで、もう一度ためしてください。';
+    $('ocrStatus').textContent = (skipNote || '勤務が見つかりませんでした。') + 'Googleカレンダーを「月」表示にして、選んでいる月と同じ月のスクショでためしてください。';
     return;
   }
-  $('ocrStatus').textContent = `${cur.y}年${cur.m}月として、${ds.length}日分の勤務が見つかりました。` +
-    (res.firstCol !== null && ![wd1, (wd1 + 6) % 7].includes(res.firstCol) ? '（注意：スクショの月と、いま選んでいる月が違うようです。月を合わせてから読み込んでください）' : '');
-  $('ocrList').innerHTML = ds.filter(d => d <= last).map(d => `${cur.m}月${d}日：<b>${escapeHtml(found[d])}</b>`).join('<br>');
+  $('ocrStatus').textContent = `${cur.y}年${cur.m}月として、${results.length > 1 ? results.length + '枚から' : ''}${ds.length}日分の勤務が見つかりました。` + skipNote;
+  $('ocrList').innerHTML = ds.map(d => `${cur.m}月${d}日：<b>${escapeHtml(found[d])}</b>`).join('<br>');
   $('ocrResultBox').classList.remove('hidden');
 }
 $('ocrApply').onclick = () => {
@@ -961,17 +980,30 @@ $('ocrApply').onclick = () => {
 // ===================== タイムカードの文字を貼り付け =====================
 const TC_PROMPT = 'この写真はタイムカードです。日付・出勤時刻・退勤時刻を、1日1行で「日 出勤 退勤」の形だけで書き出してください（例：3 21:28 8:21）。有休の日は「27 有休」と書いてください。説明や表は不要です。';
 let tcFound = null;
+$('tcPromptText').textContent = TC_PROMPT;
 $('tcBtn').onclick = () => {
   $('tcMonthNote').textContent = `${cur.y}年${cur.m}月の勤務として読み込みます。`;
   $('tcResultBox').classList.add('hidden');
+  $('tcPromptDone').classList.add('hidden'); $('tcPromptFail').classList.add('hidden');
   $('tcOverlay').classList.add('show');
+  $('tcOverlay').querySelector('.sheet').scrollTop = 0;
 };
 $('tcClose').onclick = () => $('tcOverlay').classList.remove('show');
 $('tcPrompt').onclick = async () => {
-  try { await navigator.clipboard.writeText(TC_PROMPT); $('tcPrompt').textContent = '✓ コピーしました'; }
-  catch (e) { prompt('この文を全部選んでコピーしてください', TC_PROMPT); }
-  setTimeout(() => { $('tcPrompt').textContent = 'Claudeへのお願い文をコピー'; }, 3000);
+  const ok = await copyText(TC_PROMPT);
+  $('tcPromptDone').classList.toggle('hidden', !ok);
+  $('tcPromptFail').classList.toggle('hidden', ok);
 };
+// コピー：使える方法から順に試す（iPhoneで新しい方法が使えない時のための予備つき）
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) {}
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.fontSize = '16px';
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy'); ta.remove(); return ok;
+  } catch (e) { return false; }
+}
 function parseTimecard(text) {
   const out = {}, problems = [];
   const t = toHalf(text).replace(/：/g, ':').replace(/[．.](?=\d{2}\b)/g, ':');
