@@ -130,7 +130,8 @@ nav.tabs button.on { color: var(--accent); font-weight: 700; }
       <div class="palette" id="palette"></div>
       <div class="cal" id="cal"></div>
       <div class="row" style="margin-top:10px; flex-wrap:wrap">
-        <button id="ocrBtn" style="flex:1">📷 スクショから読み込む</button>
+        <button id="ocrBtn" style="flex:1">📷 カレンダーのスクショ</button>
+        <button id="tcBtn" style="flex:1">📝 タイムカードを貼り付け</button>
         <button id="clearMonth" class="danger">この月を空にする</button>
       </div>
       <input type="file" id="ocrFile" accept="image/*" class="hidden">
@@ -188,7 +189,8 @@ nav.tabs button.on { color: var(--accent); font-weight: 700; }
       <label class="field"><span>深夜の上乗せ（1時間）<small>22時〜翌5時。空欄なら時給×0.25</small></span><input type="number" inputmode="numeric" data-k="nightAdd" placeholder="自動"></label>
       <label class="field"><span>交通費（1日）</span><input type="number" inputmode="numeric" data-k="commute" placeholder="0"></label>
       <label class="field"><span>皆勤手当（1時間）</span><input type="number" inputmode="numeric" data-k="kaikinPerHour" placeholder="0"></label>
-      <label class="field"><span>有給1日の時間<small>7時間45分なら 7.75</small></span><input type="number" inputmode="decimal" step="0.25" data-k="paidHours" placeholder="0"></label>
+      <label class="field"><span>1日の所定労働時間<small>有給1日の時間・これを超えたら残業。7時間45分なら 7.75</small></span><input type="number" inputmode="decimal" step="0.25" data-k="paidHours" placeholder="8"></label>
+      <label class="field"><span>残業の区切り（分）<small>シフトの終わりより後の分を、この単位で切り捨て</small></span><input type="number" inputmode="numeric" data-k="otUnit" placeholder="10"></label>
       <label class="field"><span>支払日（翌月の何日）</span><input type="number" inputmode="numeric" data-k="payDay" placeholder="10"></label>
     </div>
     <div class="card">
@@ -243,13 +245,38 @@ nav.tabs button.on { color: var(--accent); font-weight: 700; }
     <div class="row between"><h2 id="dayTitle" style="margin:0"></h2><button id="dayClose">閉じる</button></div>
     <div class="shiftgrid" id="dayShifts"></div>
     <div id="dayAdjBox">
-      <div class="muted">残業で延びた／早く帰った（分）</div>
+      <div class="muted">タイムカードの退勤時刻</div>
+      <div class="row" style="margin:6px 0 12px">
+        <input type="time" id="outInput" style="flex:1">
+        <button id="outClear">消す</button>
+      </div>
+      <div class="muted">残業で延びた／早く帰った（分）<span id="adjFromOutNote"></span></div>
       <div class="stepper" style="margin-top:6px">
         <button id="adjMinus">−30</button>
         <input type="number" inputmode="numeric" id="adjInput" value="0">
         <button id="adjPlus">＋30</button>
       </div>
       <p class="note">延びたら＋、早く帰ったら−。例：1時間残業なら 60</p>
+    </div>
+  </div>
+</div>
+
+<!-- タイムカードの文字を貼り付け -->
+<div class="overlay" id="tcOverlay">
+  <div class="sheet">
+    <div class="row between"><h2 style="margin:0">タイムカードを貼り付け</h2><button id="tcClose">閉じる</button></div>
+    <p class="muted" id="tcMonthNote"></p>
+    <ol class="muted" style="padding-left:20px; margin:6px 0">
+      <li>下のボタンでお願い文をコピー</li>
+      <li>Claudeアプリにタイムカードの写真とお願い文を送る</li>
+      <li>返ってきた文字をコピーして、下の枠に貼り付け</li>
+    </ol>
+    <button id="tcPrompt" style="width:100%">Claudeへのお願い文をコピー</button>
+    <textarea id="tcText" style="margin-top:8px" placeholder="例：&#10;3 21:28 8:21&#10;4 19:40 8:13&#10;27 有休"></textarea>
+    <button id="tcParse" class="primary" style="width:100%; margin-top:6px">読み込む</button>
+    <div id="tcResultBox" class="hidden" style="margin-top:10px">
+      <div class="ocr-list" id="tcList"></div>
+      <button id="tcApply" class="primary" style="width:100%; margin-top:6px">カレンダーに反映する</button>
     </div>
   </div>
 </div>
@@ -285,7 +312,7 @@ function defaultState() {
     settings: {
       wage: null, otRate: null, nightAdd: null, commute: null, kaikinPerHour: null, payDay: 10,
       healthFixed: null, pensionFixed: null, residentTax: null, dependents: 0,
-      healthRate: 5.07, pensionRate: 9.15, empRate: 0.5, paidHours: 7.75,
+      healthRate: 5.07, pensionRate: 9.15, empRate: 0.5, paidHours: 7.75, otUnit: 10,
       shifts: DEFAULT_SHIFTS.map(s => ({ ...s })),
     },
     months: {},
@@ -313,25 +340,43 @@ const num = v => (v === null || v === '' || v === undefined || isNaN(+v)) ? null
 const toMin = t => { const [h, m] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
 const overlap = (a1, a2, b1, b2) => Math.max(0, Math.min(a2, b2) - Math.max(a1, b1));
 
-// 1日分：勤務分・残業分（8時間超）・深夜分（22〜5時）
+// 1日分：勤務分・残業分・深夜分（22〜5時）
+// 残業＝シフトの予定時間のうち所定時間（例 7時間45分）を超えた分＋シフトの終わりより後に働いた分
+// 深夜＝22〜5時の間にいた時間（休憩は引かない。給与明細の計算に合わせている）
 function calcShift(shift, adj) {
+  adj = adj || 0;
+  const std = (num(state.settings.paidHours) ?? 8) * 60;
   const start = toMin(shift.start);
-  let end = toMin(shift.end);
-  if (end <= start) end += 1440;
-  end += (adj || 0);
-  if (end < start) end = start;
+  let schedEnd = toMin(shift.end);
+  if (schedEnd <= start) schedEnd += 1440;
+  const end = Math.max(start, schedEnd + adj);
   let bs = toMin(shift.brStart);
   if (bs < start) bs += 1440;
-  const bm = Math.max(0, num(shift.brMin) || 0);
-  const be = bs + bm;
-  const brIn = overlap(start, end, bs, be);
-  const work = (end - start) - brIn;
+  const be = bs + Math.max(0, num(shift.brMin) || 0);
+  const schedWork = (schedEnd - start) - overlap(start, schedEnd, bs, be);
+  const work = (end - start) - overlap(start, end, bs, be);
+  const ot = adj >= 0 ? Math.max(0, schedWork - std) + adj : Math.max(0, work - std);
   let night = 0;
-  for (let k = 0; k <= 2; k++) {
-    const n1 = k * 1440 - 120, n2 = k * 1440 + 300; // 前日22:00〜当日5:00
-    night += overlap(start, end, n1, n2) - overlap(Math.max(start, n1), Math.min(end, n2), bs, be);
+  for (let k = 0; k <= 2; k++) night += overlap(start, end, k * 1440 - 120, k * 1440 + 300); // 前日22:00〜当日5:00
+  return { work, ot, night };
+}
+// 退勤の打刻から、シフトの終わりより後の分を区切り単位（例 10分）で切り捨てて出す
+function adjFromOut(shift, out) {
+  let diff = toMin(out) - toMin(shift.end);
+  while (diff > 720) diff -= 1440;
+  while (diff <= -720) diff += 1440;
+  const u = Math.max(1, num(state.settings.otUnit) || 10);
+  return diff >= 0 ? Math.floor(diff / u) * u : -Math.floor(-diff / u) * u;
+}
+// 出勤・退勤の打刻から、いちばん近い勤務を選ぶ
+function guessShift(inT, outT) {
+  const circ = (a, b) => { const d = Math.abs(toMin(a) - toMin(b)) % 1440; return Math.min(d, 1440 - d); };
+  let best = null, bestScore = Infinity;
+  for (const s of state.settings.shifts) {
+    const sc = circ(inT, s.start) + circ(outT, s.end);
+    if (circ(inT, s.start) <= 150 && sc < bestScore) { best = s; bestScore = sc; }
   }
-  return { work, ot: Math.max(0, work - 480), night: Math.max(0, night) };
+  return best;
 }
 
 // 所得税：令和8年分 源泉徴収税額表（月額表・甲欄）。行＝「以上」の金額(千円),扶養0〜7人の税額。上限は740千円未満
@@ -500,7 +545,11 @@ function openDay(d) {
   for (const s of state.settings.shifts) {
     const b = document.createElement('button'); b.textContent = s.name;
     if (rec.s === s.name) { b.style.background = shiftColor(s.name); b.style.color = '#fff'; }
-    b.onclick = () => { md.days[d] = { s: s.name, adj: (md.days[d] || {}).adj || 0 }; save(); openDay(d); renderMonth(); };
+    b.onclick = () => {
+      const prev = md.days[d] || {};
+      md.days[d] = prev.out ? { s: s.name, out: prev.out, adj: adjFromOut(s, prev.out) } : { s: s.name, adj: prev.adj || 0 };
+      save(); openDay(d); renderMonth();
+    };
     g.appendChild(b);
   }
   const pd = document.createElement('button'); pd.textContent = PAID;
@@ -511,14 +560,24 @@ function openDay(d) {
   off.onclick = () => { delete md.days[d]; save(); closeDay(); renderMonth(); };
   g.appendChild(off);
   $('adjInput').value = rec.adj || 0;
-  $('dayAdjBox').classList.toggle('hidden', !rec.s);
+  $('outInput').value = rec.out || '';
+  $('adjFromOutNote').textContent = rec.out ? '（退勤時刻から計算）' : '';
+  $('dayAdjBox').classList.toggle('hidden', !rec.s || rec.s === PAID);
   $('dayOverlay').classList.add('show');
 }
 function closeDay() { $('dayOverlay').classList.remove('show'); dayOpen = null; }
 function setAdj(v) {
   const md = monthData(true); const rec = md.days[dayOpen]; if (!rec) return;
-  rec.adj = Math.round(num(v) || 0); $('adjInput').value = rec.adj; save(); renderMonth();
+  rec.adj = Math.round(num(v) || 0); delete rec.out; $('adjInput').value = rec.adj; save(); renderMonth();
+  $('outInput').value = ''; $('adjFromOutNote').textContent = '';
 }
+$('outInput').onchange = e => {
+  const md = monthData(true); const rec = md.days[dayOpen]; if (!rec) return;
+  const sh = state.settings.shifts.find(s => s.name === rec.s); if (!sh || !e.target.value) return;
+  rec.out = e.target.value; rec.adj = adjFromOut(sh, rec.out);
+  $('adjInput').value = rec.adj; $('adjFromOutNote').textContent = '（退勤時刻から計算）'; save(); renderMonth();
+};
+$('outClear').onclick = () => setAdj(0);
 $('adjMinus').onclick = () => setAdj((num($('adjInput').value) || 0) - 30);
 $('adjPlus').onclick = () => setAdj((num($('adjInput').value) || 0) + 30);
 $('adjInput').onchange = e => setAdj(e.target.value);
@@ -543,7 +602,7 @@ function renderMonth() {
   $('netSub').textContent = `総支給 ${yen(r.gross)} − 引かれる額 ${yen(r.dedTotal)}`;
   rows('hoursTable', [
     ['出勤日数', r.days + '日'], ...(r.paidDays ? [['有給', r.paidDays + '日']] : []), ['働いた時間（休憩を除く）', hm(r.work)],
-    ['うち残業（1日8時間を超えた分）', hm(r.ot)], ['うち深夜（22時〜翌5時）', hm(r.night)],
+    ['うち残業', hm(r.ot)], ['うち深夜（22時〜翌5時）', hm(r.night)],
     ...(r.unknown ? [['設定にない勤務名', r.unknown + '日（計算に入っていません）']] : []),
   ]);
   rows('payTable', [
@@ -897,6 +956,55 @@ $('ocrApply').onclick = () => {
   const md = monthData(true); const last = new Date(cur.y, cur.m, 0).getDate();
   for (const [d, name] of Object.entries(ocrFound || {})) if (+d <= last) md.days[d] = { s: name, adj: md.days[d]?.s === name ? (md.days[d].adj || 0) : 0 };
   save(); $('ocrOverlay').classList.remove('show'); renderMonth();
+};
+
+// ===================== タイムカードの文字を貼り付け =====================
+const TC_PROMPT = 'この写真はタイムカードです。日付・出勤時刻・退勤時刻を、1日1行で「日 出勤 退勤」の形だけで書き出してください（例：3 21:28 8:21）。有休の日は「27 有休」と書いてください。説明や表は不要です。';
+let tcFound = null;
+$('tcBtn').onclick = () => {
+  $('tcMonthNote').textContent = `${cur.y}年${cur.m}月の勤務として読み込みます。`;
+  $('tcResultBox').classList.add('hidden');
+  $('tcOverlay').classList.add('show');
+};
+$('tcClose').onclick = () => $('tcOverlay').classList.remove('show');
+$('tcPrompt').onclick = async () => {
+  try { await navigator.clipboard.writeText(TC_PROMPT); $('tcPrompt').textContent = '✓ コピーしました'; }
+  catch (e) { prompt('この文を全部選んでコピーしてください', TC_PROMPT); }
+  setTimeout(() => { $('tcPrompt').textContent = 'Claudeへのお願い文をコピー'; }, 3000);
+};
+function parseTimecard(text) {
+  const out = {}, problems = [];
+  const t = toHalf(text).replace(/：/g, ':').replace(/[．.](?=\d{2}\b)/g, ':');
+  for (const raw of t.split(/\r?\n/)) {
+    const line = raw.trim(); if (!line) continue;
+    let m = line.match(/^\D*?(?:\d{1,2}\s*\/\s*)?(\d{1,2})(?!\s*:)\D*?(\d{1,2}:\d{2})\D+?(\d{1,2}:\d{2})/);
+    if (m) {
+      const d = +m[1], sh = guessShift(m[2], m[3]);
+      if (!sh) { problems.push(`${d}日：勤務の種類が分かりませんでした（${m[2]}〜${m[3]}）`); continue; }
+      out[d] = { s: sh.name, in: m[2], out: m[3], adj: adjFromOut(sh, m[3]) };
+      continue;
+    }
+    m = line.match(/^\D*?(?:\d{1,2}\s*\/\s*)?(\d{1,2})\D*?(有休|有給)/);
+    if (m) out[+m[1]] = { s: PAID, adj: 0 };
+  }
+  return { out, problems };
+}
+$('tcParse').onclick = () => {
+  const { out, problems } = parseTimecard($('tcText').value);
+  const last = new Date(cur.y, cur.m, 0).getDate();
+  const ds = Object.keys(out).map(Number).filter(d => d >= 1 && d <= last).sort((a, b) => a - b);
+  tcFound = {}; ds.forEach(d => { tcFound[d] = out[d]; });
+  $('tcList').innerHTML = (ds.length ? ds.map(d => {
+    const r = out[d];
+    return r.s === PAID ? `${cur.m}月${d}日：<b>${PAID}</b>` : `${cur.m}月${d}日：<b>${escapeHtml(r.s)}</b>（${r.in}〜${r.out}・残業延長 ${r.adj}分）`;
+  }).join('<br>') : '読み取れる行がありませんでした。') + (problems.length ? '<br><span style="color:var(--danger)">' + problems.map(escapeHtml).join('<br>') + '</span>' : '');
+  $('tcApply').classList.toggle('hidden', !ds.length);
+  $('tcResultBox').classList.remove('hidden');
+};
+$('tcApply').onclick = () => {
+  const md = monthData(true);
+  for (const [d, r] of Object.entries(tcFound || {})) md.days[d] = r;
+  save(); $('tcOverlay').classList.remove('show'); $('tcText').value = ''; renderMonth();
 };
 
 // ===================== 起動 =====================
