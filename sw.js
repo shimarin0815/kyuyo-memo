@@ -1,5 +1,5 @@
 // 電波がなくても開けるように、ページ本体を端末に保存しておく（入力した記録は送信しない）
-const CACHE = 'kyuyo-memo-v1';
+const CACHE = 'kyuyo-memo-v2';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate', e => {
