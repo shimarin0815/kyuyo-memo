@@ -621,8 +621,16 @@ document.querySelectorAll('[data-k]').forEach(inp => inp.onchange = () => { stat
 $('addShift').onclick = () => { state.settings.shifts.push({ name: '新勤務', start: '09:00', end: '18:00', brStart: '12:00', brMin: 60 }); save(); renderSettings(); };
 $('exportCopy').onclick = async () => {
   const text = JSON.stringify({ app: 'kyuyo-memo', v: 1, savedAt: new Date().toISOString(), data: state });
-  try { await navigator.clipboard.writeText(text); $('backupNote').textContent = 'コピーしました。メモアプリなどに貼り付けて保管してください。'; }
-  catch (e) { $('importBox').classList.remove('hidden'); $('importText').value = text; $('importText').select(); $('backupNote').textContent = '自動でコピーできませんでした。下の文字を全部選んでコピーしてください。'; }
+  try {
+    await navigator.clipboard.writeText(text);
+    $('backupNote').textContent = 'コピーしました。メモアプリなどに貼り付けて保管してください。';
+    $('exportCopy').textContent = '✓ コピーしました';
+    setTimeout(() => { $('exportCopy').textContent = 'ひかえをコピー'; }, 3000);
+    alert('ひかえをコピーしました。');
+  } catch (e) {
+    $('importBox').classList.remove('hidden'); $('importText').value = text; $('importText').select();
+    $('backupNote').textContent = '自動でコピーできませんでした。下の文字を全部選んでコピーしてください。';
+  }
 };
 $('importOpen').onclick = () => { $('importBox').classList.toggle('hidden'); $('importText').value = ''; };
 $('importDo').onclick = () => {
