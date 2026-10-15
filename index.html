@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="給与メモ">
+<meta name="theme-color" content="#0f766e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>給与メモ</title>
+<style>
+:root {
+  --bg: #f4f6f5; --card: #ffffff; --text: #1c2421; --sub: #5f6b66; --line: #dfe5e2;
+  --accent: #0f766e; --accent-soft: #e0f2ef; --warn: #b45309; --danger: #b91c1c;
+  --s1: #2563eb; --s2: #d97706; --s3: #7c3aed; --sA: #059669; --sB: #be185d; --sOther: #475569;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111615; --card: #1b2220; --text: #e8eeeb; --sub: #9aa8a2; --line: #2c3633;
+    --accent: #2dd4bf; --accent-soft: #163a35; --warn: #fbbf24; --danger: #f87171;
+  }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
+  font-size: 16px; line-height: 1.5;
+  padding: env(safe-area-inset-top) 0 calc(72px + env(safe-area-inset-bottom));
+}
+main { max-width: 560px; margin: 0 auto; padding: 12px 16px; }
+h1 { font-size: 20px; margin: 4px 0 12px; }
+h2 { font-size: 17px; margin: 0 0 10px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+.muted { color: var(--sub); font-size: 13px; }
+.row { display: flex; align-items: center; gap: 8px; }
+.between { justify-content: space-between; }
+button {
+  font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--text);
+  border-radius: 10px; padding: 10px 12px; cursor: pointer; min-height: 44px;
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button.danger { color: var(--danger); }
+button:disabled { opacity: .5; }
+input, select, textarea {
+  font: inherit; font-size: 16px; color: var(--text); background: var(--card);
+  border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-height: 44px;
+}
+textarea { width: 100%; min-height: 120px; font-size: 13px; }
+label.field { display: grid; grid-template-columns: 1fr 140px; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+label.field:last-child { border-bottom: none; }
+label.field input { width: 100%; text-align: right; }
+label.field small { display: block; color: var(--sub); font-size: 12px; line-height: 1.3; }
+
+/* month header */
+.monthbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.monthbar strong { font-size: 20px; }
+.monthbar button { width: 48px; }
+
+/* palette */
+.palette { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.palette button { flex: 1 0 auto; min-width: 54px; padding: 8px 6px; font-weight: 600; }
+.palette button.on { outline: 3px solid var(--accent); outline-offset: 1px; }
+
+/* calendar */
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cal .wd { text-align: center; font-size: 12px; color: var(--sub); padding: 2px 0; }
+.cal .wd.sun { color: var(--danger); } .cal .wd.sat { color: var(--s1); }
+.day {
+  min-height: 58px; border: 1px solid var(--line); border-radius: 8px; background: var(--card);
+  padding: 2px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  cursor: pointer; user-select: none; -webkit-user-select: none; min-width: 0;
+}
+.day.empty { visibility: hidden; }
+.day .n { font-size: 12px; color: var(--sub); }
+.day .tag { margin-top: 2px; font-size: 13px; font-weight: 700; color: #fff; border-radius: 6px; padding: 1px 5px; max-width: 100%; overflow: hidden; white-space: nowrap; }
+.day .adj { font-size: 10px; color: var(--warn); line-height: 1.2; }
+.day.today { border-color: var(--accent); border-width: 2px; }
+
+/* result */
+table.list { width: 100%; border-collapse: collapse; font-size: 15px; }
+table.list td { padding: 5px 0; border-bottom: 1px solid var(--line); }
+table.list td:last-child { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+table.list tr.total td { font-weight: 700; border-bottom: none; }
+.big { font-size: 30px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+.note { font-size: 12px; color: var(--sub); margin: 8px 0 0; }
+.warnbox { background: #fef3c7; color: #78350f; border-radius: 10px; padding: 10px 12px; font-size: 14px; margin-bottom: 12px; }
+@media (prefers-color-scheme: dark) { .warnbox { background: #3b2f12; color: #fde68a; } }
+
+/* tabs */
+nav.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line);
+  display: flex; padding-bottom: env(safe-area-inset-bottom); z-index: 10;
+}
+nav.tabs button { flex: 1; border: none; border-radius: 0; background: none; padding: 10px 0; font-size: 14px; color: var(--sub); min-height: 56px; }
+nav.tabs button.on { color: var(--accent); font-weight: 700; }
+
+/* sheet */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none; z-index: 20; align-items: flex-end; justify-content: center; }
+.overlay.show { display: flex; }
+.sheet { background: var(--card); width: 100%; max-width: 560px; border-radius: 16px 16px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); max-height: 88vh; overflow: auto; }
+.shiftgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
+.shiftgrid button { font-weight: 700; }
+.stepper { display: flex; align-items: center; gap: 8px; }
+.stepper input { width: 90px; text-align: center; }
+
+.shift-edit { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.shift-edit .line { display: grid; grid-template-columns: 76px 1fr 1fr; gap: 6px; align-items: center; margin-top: 6px; }
+.shift-edit input { width: 100%; min-width: 0; padding: 6px; }
+.shift-edit .lbl { font-size: 12px; color: var(--sub); }
+.ocr-list { font-size: 14px; max-height: 40vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <!-- ===== 今月 ===== -->
+  <section id="tab-month">
+    <div id="setupWarn" class="warnbox hidden">はじめに下の「設定」で、時給と交通費を入れてください。</div>
+    <div class="card">
+      <div class="monthbar">
+        <button id="prevM" aria-label="前の月">‹</button>
+        <div style="text-align:center"><strong id="mLabel"></strong><div class="muted" id="payLabel"></div></div>
+        <button id="nextM" aria-label="次の月">›</button>
+      </div>
+      <div class="muted" style="margin-bottom:6px">① 勤務を選ぶ → ② 日にちをタップ</div>
+      <div class="palette" id="palette"></div>
+      <div class="cal" id="cal"></div>
+      <div class="row" style="margin-top:10px; flex-wrap:wrap">
+        <button id="ocrBtn" style="flex:1">📷 スクショから読み込む</button>
+        <button id="clearMonth" class="danger">この月を空にする</button>
+      </div>
+      <input type="file" id="ocrFile" accept="image/*" class="hidden">
+    </div>
+
+    <div class="card">
+      <h2>この月の手取りの目安</h2>
+      <div class="big" id="netBig">0円</div>
+      <div class="muted" id="netSub"></div>
+      <label class="row" style="margin-top:10px">
+        <input type="checkbox" id="kaikin" style="min-height:auto; width:22px; height:22px">
+        <span>皆勤手当の条件を満たした</span>
+      </label>
+    </div>
+
+    <div class="card">
+      <h2>勤務</h2>
+      <table class="list" id="hoursTable"></table>
+    </div>
+    <div class="card">
+      <h2>支給（もらえる額）</h2>
+      <table class="list" id="payTable"></table>
+    </div>
+    <div class="card">
+      <h2>引かれる額</h2>
+      <table class="list" id="dedTable"></table>
+      <p class="note" id="dedNote"></p>
+    </div>
+    <div class="card">
+      <h2>実際の振込額（明細が来たら）</h2>
+      <div class="row">
+        <input type="number" inputmode="numeric" id="actualNet" placeholder="例：250000" style="flex:1">
+        <span>円</span>
+      </div>
+      <p class="note" id="diffNote"></p>
+    </div>
+  </section>
+
+  <!-- ===== 記録 ===== -->
+  <section id="tab-history" class="hidden">
+    <h1>月ごとの記録</h1>
+    <div class="card">
+      <table class="list" id="histTable"></table>
+      <p class="note">勤務した月ごとの目安です。振込はその翌月の支払日です。</p>
+    </div>
+  </section>
+
+  <!-- ===== 設定 ===== -->
+  <section id="tab-settings" class="hidden">
+    <h1>設定</h1>
+    <div class="card">
+      <h2>お金のルール</h2>
+      <label class="field"><span>時給<small>契約書の「基本賃金」</small></span><input type="number" inputmode="numeric" data-k="wage" placeholder="0"></label>
+      <label class="field"><span>残業の時給<small>空欄なら時給×1.25</small></span><input type="number" inputmode="numeric" data-k="otRate" placeholder="自動"></label>
+      <label class="field"><span>深夜の上乗せ（1時間）<small>22時〜翌5時。空欄なら時給×0.25</small></span><input type="number" inputmode="numeric" data-k="nightAdd" placeholder="自動"></label>
+      <label class="field"><span>交通費（1日）</span><input type="number" inputmode="numeric" data-k="commute" placeholder="0"></label>
+      <label class="field"><span>皆勤手当（1時間）</span><input type="number" inputmode="numeric" data-k="kaikinPerHour" placeholder="0"></label>
+      <label class="field"><span>支払日（翌月の何日）</span><input type="number" inputmode="numeric" data-k="payDay" placeholder="10"></label>
+    </div>
+    <div class="card">
+      <h2>引かれる額（給与明細を見て）</h2>
+      <p class="muted" style="margin-top:0">明細の金額を入れると、手取りの目安が正確になります。空欄の場合は大まかに計算します。</p>
+      <label class="field"><span>健康保険（毎月）<small>空欄なら総支給の約5%</small></span><input type="number" inputmode="numeric" data-k="healthFixed" placeholder="自動"></label>
+      <label class="field"><span>厚生年金（毎月）<small>空欄なら総支給の9.15%</small></span><input type="number" inputmode="numeric" data-k="pensionFixed" placeholder="自動"></label>
+      <label class="field"><span>住民税（毎月）<small>明細に載っている額</small></span><input type="number" inputmode="numeric" data-k="residentTax" placeholder="0"></label>
+      <label class="field"><span>扶養している家族の人数<small>いなければ0</small></span><input type="number" inputmode="numeric" data-k="dependents" placeholder="0"></label>
+      <details style="margin-top:8px">
+        <summary class="muted">細かい率（ふつうは触らなくてOK）</summary>
+        <label class="field"><span>健康保険の率（%）</span><input type="number" inputmode="decimal" step="0.01" data-k="healthRate"></label>
+        <label class="field"><span>厚生年金の率（%）</span><input type="number" inputmode="decimal" step="0.01" data-k="pensionRate"></label>
+        <label class="field"><span>雇用保険の率（%）</span><input type="number" inputmode="decimal" step="0.01" data-k="empRate"></label>
+      </details>
+    </div>
+    <div class="card">
+      <h2>勤務の種類</h2>
+      <p class="muted" style="margin-top:0">終わりが始まりより早いときは「翌朝まで」として計算します。</p>
+      <div id="shiftEdit"></div>
+      <button id="addShift" style="margin-top:8px">＋ 勤務の種類を追加</button>
+    </div>
+    <div class="card">
+      <h2>記録のひかえ</h2>
+      <p class="muted" style="margin-top:0">記録はこの端末の中だけに保存されています。機種変更の前や、PCに移したいときに使います。</p>
+      <div class="row" style="flex-wrap:wrap">
+        <button id="exportCopy" style="flex:1">ひかえをコピー</button>
+        <button id="importOpen" style="flex:1">ひかえを貼り付けて戻す</button>
+      </div>
+      <div id="importBox" class="hidden" style="margin-top:8px">
+        <textarea id="importText" placeholder="ここに貼り付け"></textarea>
+        <button id="importDo" class="primary" style="margin-top:6px; width:100%">この内容で戻す</button>
+      </div>
+      <p class="note" id="backupNote"></p>
+    </div>
+    <div class="card">
+      <button id="wipeAll" class="danger" style="width:100%">すべての記録と設定を消す</button>
+    </div>
+    <p class="muted" style="text-align:center">計算はすべてこの端末の中で行い、どこにも送信しません。</p>
+  </section>
+</main>
+
+<nav class="tabs">
+  <button data-tab="month" class="on">今月</button>
+  <button data-tab="history">記録</button>
+  <button data-tab="settings">設定</button>
+</nav>
+
+<!-- 日の詳細 -->
+<div class="overlay" id="dayOverlay">
+  <div class="sheet">
+    <div class="row between"><h2 id="dayTitle" style="margin:0"></h2><button id="dayClose">閉じる</button></div>
+    <div class="shiftgrid" id="dayShifts"></div>
+    <div id="dayAdjBox">
+      <div class="muted">残業で延びた／早く帰った（分）</div>
+      <div class="stepper" style="margin-top:6px">
+        <button id="adjMinus">−30</button>
+        <input type="number" inputmode="numeric" id="adjInput" value="0">
+        <button id="adjPlus">＋30</button>
+      </div>
+      <p class="note">延びたら＋、早く帰ったら−。例：1時間残業なら 60</p>
+    </div>
+  </div>
+</div>
+
+<!-- スクショ読み込み -->
+<div class="overlay" id="ocrOverlay">
+  <div class="sheet">
+    <div class="row between"><h2 style="margin:0">スクショの読み取り</h2><button id="ocrClose">閉じる</button></div>
+    <p id="ocrStatus" class="muted"></p>
+    <div id="ocrResultBox" class="hidden">
+      <div class="ocr-list" id="ocrList"></div>
+      <p class="note">読み間違いがあれば、反映したあとにカレンダーで直せます。</p>
+      <button id="ocrApply" class="primary" style="width:100%; margin-top:6px">カレンダーに反映する</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ===================== 保存 =====================
+const KEY = 'kyuyo-memo-v1';
+const SHIFT_COLORS = ['--s1', '--s2', '--s3', '--sA', '--sB', '--sOther'];
+const DEFAULT_SHIFTS = [
+  { name: '1勤', start: '08:00', end: '16:30', brStart: '12:00', brMin: 45 },
+  { name: '2勤', start: '14:00', end: '22:00', brStart: '18:00', brMin: 45 },
+  { name: '3勤', start: '22:00', end: '08:00', brStart: '02:00', brMin: 45 },
+  { name: 'A勤', start: '08:00', end: '20:00', brStart: '12:00', brMin: 45 },
+  { name: 'B勤', start: '20:00', end: '08:00', brStart: '00:00', brMin: 45 },
+];
+function defaultState() {
+  return {
+    settings: {
+      wage: null, otRate: null, nightAdd: null, commute: null, kaikinPerHour: null, payDay: 10,
+      healthFixed: null, pensionFixed: null, residentTax: null, dependents: 0,
+      healthRate: 5.07, pensionRate: 9.15, empRate: 0.5,
+      shifts: DEFAULT_SHIFTS.map(s => ({ ...s })),
+    },
+    months: {},
+  };
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return defaultState();
+    const st = JSON.parse(raw);
+    const d = defaultState();
+    st.settings = Object.assign(d.settings, st.settings || {});
+    st.months = st.months || {};
+    return st;
+  } catch (e) { return defaultState(); }
+}
+let state = load();
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { alert('保存できませんでした。プライベートブラウズを使っていないか確認してください。'); }
+}
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {}
+
+// ===================== 計算 =====================
+const num = v => (v === null || v === '' || v === undefined || isNaN(+v)) ? null : +v;
+const toMin = t => { const [h, m] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+const overlap = (a1, a2, b1, b2) => Math.max(0, Math.min(a2, b2) - Math.max(a1, b1));
+
+// 1日分：勤務分・残業分（8時間超）・深夜分（22〜5時）
+function calcShift(shift, adj) {
+  const start = toMin(shift.start);
+  let end = toMin(shift.end);
+  if (end <= start) end += 1440;
+  end += (adj || 0);
+  if (end < start) end = start;
+  let bs = toMin(shift.brStart);
+  if (bs < start) bs += 1440;
+  const bm = Math.max(0, num(shift.brMin) || 0);
+  const be = bs + bm;
+  const brIn = overlap(start, end, bs, be);
+  const work = (end - start) - brIn;
+  let night = 0;
+  for (let k = 0; k <= 2; k++) {
+    const n1 = k * 1440 - 120, n2 = k * 1440 + 300; // 前日22:00〜当日5:00
+    night += overlap(start, end, n1, n2) - overlap(Math.max(start, n1), Math.min(end, n2), bs, be);
+  }
+  return { work, ot: Math.max(0, work - 480), night: Math.max(0, night) };
+}
+
+// 所得税（令和8年分 月額表甲欄の電算機計算の特例）
+function incomeTax(A, dependents) {
+  if (A <= 0) return 0;
+  let kyuyo;
+  if (A <= 158333) kyuyo = 54167;
+  else if (A <= 299999) kyuyo = Math.ceil(A * 0.3 + 6667);
+  else if (A <= 549999) kyuyo = Math.ceil(A * 0.2 + 36667);
+  else if (A <= 708330) kyuyo = Math.ceil(A * 0.1 + 91667);
+  else kyuyo = 162500;
+  let kiso;
+  if (A <= 2120833) kiso = 48334;
+  else if (A <= 2162499) kiso = 40000;
+  else if (A <= 2204166) kiso = 26667;
+  else if (A <= 2245833) kiso = 13334;
+  else kiso = 0;
+  const B = Math.floor(A - kyuyo - kiso - 31667 * (dependents || 0));
+  if (B <= 0) return 0;
+  let t;
+  if (B <= 162500) t = B * 0.05105;
+  else if (B <= 275000) t = B * 0.10210 - 8296;
+  else if (B <= 579166) t = B * 0.20420 - 36374;
+  else if (B <= 750000) t = B * 0.23483 - 54113;
+  else if (B <= 1500000) t = B * 0.33693 - 130688;
+  else if (B <= 3333333) t = B * 0.40840 - 237893;
+  else t = B * 0.45945 - 408061;
+  return Math.max(0, Math.round(t / 10) * 10);
+}
+// 雇用保険：50銭以下切り捨て、50銭超切り上げ
+function empIns(gross, rate) {
+  const v = gross * rate / 100;
+  const f = Math.floor(v);
+  return (v - f) > 0.5 ? f + 1 : f;
+}
+
+function calcMonth(ym) {
+  const S = state.settings;
+  const m = state.months[ym] || { days: {} };
+  const wage = num(S.wage) || 0;
+  const otRate = num(S.otRate) ?? Math.round(wage * 1.25);
+  const nightAdd = num(S.nightAdd) ?? Math.round(wage * 0.25);
+  let days = 0, work = 0, ot = 0, night = 0, unknown = 0;
+  for (const d of Object.values(m.days || {})) {
+    const sh = S.shifts.find(s => s.name === d.s);
+    if (!sh) { if (d.s) unknown++; continue; }
+    const r = calcShift(sh, d.adj);
+    days++; work += r.work; ot += r.ot; night += r.night;
+  }
+  const kaikinOn = m.kaikin !== false;
+  const pay = {
+    normal: Math.round(wage * (work - ot) / 60),
+    overtime: Math.round(otRate * ot / 60),
+    night: Math.round(nightAdd * night / 60),
+    kaikin: kaikinOn ? Math.round((num(S.kaikinPerHour) || 0) * work / 60) : 0,
+    commute: Math.round((num(S.commute) || 0) * days),
+  };
+  const gross = pay.normal + pay.overtime + pay.night + pay.kaikin + pay.commute;
+  const healthAuto = num(S.healthFixed) === null, pensionAuto = num(S.pensionFixed) === null;
+  const ded = {
+    health: days === 0 ? 0 : (healthAuto ? Math.round(gross * (num(S.healthRate) || 0) / 100) : num(S.healthFixed)),
+    pension: days === 0 ? 0 : (pensionAuto ? Math.round(gross * (num(S.pensionRate) || 0) / 100) : num(S.pensionFixed)),
+    emp: empIns(gross, num(S.empRate) || 0),
+  };
+  const social = ded.health + ded.pension + ded.emp;
+  ded.tax = incomeTax(gross - pay.commute - social, num(S.dependents) || 0);
+  ded.resident = days === 0 ? 0 : (num(S.residentTax) || 0);
+  const dedTotal = ded.health + ded.pension + ded.emp + ded.tax + ded.resident;
+  return { days, work, ot, night, unknown, pay, gross, ded, dedTotal, net: gross - dedTotal, healthAuto, pensionAuto, kaikinOn, otRate, nightAdd };
+}
+
+// ===================== 表示 =====================
+const $ = id => document.getElementById(id);
+const yen = n => (Math.round(n) || 0).toLocaleString('ja-JP') + '円';
+const hm = min => { const h = Math.floor(min / 60), m = min % 60; return m ? `${h}時間${m}分` : `${h}時間`; };
+const pad = n => String(n).padStart(2, '0');
+const now = new Date();
+let cur = { y: now.getFullYear(), m: now.getMonth() + 1 };
+const ymKey = (y, m) => `${y}-${pad(m)}`;
+let paint = null; // 選択中の勤務名 / '__erase' / null(詳細)
+
+function shiftColor(name) {
+  const i = state.settings.shifts.findIndex(s => s.name === name);
+  return `var(${SHIFT_COLORS[i >= 0 ? Math.min(i, SHIFT_COLORS.length - 1) : SHIFT_COLORS.length - 1]})`;
+}
+function monthData(create) {
+  const k = ymKey(cur.y, cur.m);
+  if (!state.months[k] && create) state.months[k] = { days: {} };
+  return state.months[k];
+}
+
+function renderPalette() {
+  const p = $('palette'); p.innerHTML = '';
+  const items = [...state.settings.shifts.map(s => ({ v: s.name, label: s.name, color: shiftColor(s.name) })),
+    { v: '__erase', label: '消す' }, { v: null, label: '調整' }];
+  if (paint === undefined) paint = state.settings.shifts[0]?.name ?? null;
+  for (const it of items) {
+    const b = document.createElement('button');
+    b.textContent = it.label;
+    if (it.color) { b.style.background = it.color; b.style.color = '#fff'; b.style.borderColor = it.color; }
+    if (paint === it.v) b.classList.add('on');
+    b.onclick = () => { paint = it.v; renderPalette(); };
+    p.appendChild(b);
+  }
+}
+
+function renderCal() {
+  const cal = $('cal'); cal.innerHTML = '';
+  ['日', '月', '火', '水', '木', '金', '土'].forEach((w, i) => {
+    const d = document.createElement('div'); d.className = 'wd' + (i === 0 ? ' sun' : i === 6 ? ' sat' : ''); d.textContent = w; cal.appendChild(d);
+  });
+  const first = new Date(cur.y, cur.m - 1, 1).getDay();
+  const last = new Date(cur.y, cur.m, 0).getDate();
+  const md = monthData(false) || { days: {} };
+  for (let i = 0; i < first; i++) { const e = document.createElement('div'); e.className = 'day empty'; cal.appendChild(e); }
+  for (let d = 1; d <= last; d++) {
+    const cell = document.createElement('div'); cell.className = 'day';
+    if (cur.y === now.getFullYear() && cur.m === now.getMonth() + 1 && d === now.getDate()) cell.classList.add('today');
+    const rec = md.days[d];
+    let html = `<span class="n">${d}</span>`;
+    if (rec && rec.s) html += `<span class="tag" style="background:${shiftColor(rec.s)}">${escapeHtml(rec.s)}</span>`;
+    if (rec && rec.adj) html += `<span class="adj">${rec.adj > 0 ? '+' : ''}${rec.adj}分</span>`;
+    cell.innerHTML = html;
+    cell.onclick = () => onDayTap(d);
+    cal.appendChild(cell);
+  }
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+function onDayTap(d) {
+  if (paint === null) return openDay(d);
+  const md = monthData(true);
+  if (paint === '__erase') delete md.days[d];
+  else md.days[d] = { s: paint, adj: md.days[d]?.s === paint ? (md.days[d].adj || 0) : 0 };
+  save(); renderMonth();
+}
+
+let dayOpen = null;
+function openDay(d) {
+  dayOpen = d;
+  const md = monthData(true);
+  const rec = md.days[d] || {};
+  $('dayTitle').textContent = `${cur.m}月${d}日`;
+  const g = $('dayShifts'); g.innerHTML = '';
+  for (const s of state.settings.shifts) {
+    const b = document.createElement('button'); b.textContent = s.name;
+    if (rec.s === s.name) { b.style.background = shiftColor(s.name); b.style.color = '#fff'; }
+    b.onclick = () => { md.days[d] = { s: s.name, adj: (md.days[d] || {}).adj || 0 }; save(); openDay(d); renderMonth(); };
+    g.appendChild(b);
+  }
+  const off = document.createElement('button'); off.textContent = '休み（消す）'; off.className = 'danger';
+  off.onclick = () => { delete md.days[d]; save(); closeDay(); renderMonth(); };
+  g.appendChild(off);
+  $('adjInput').value = rec.adj || 0;
+  $('dayAdjBox').classList.toggle('hidden', !rec.s);
+  $('dayOverlay').classList.add('show');
+}
+function closeDay() { $('dayOverlay').classList.remove('show'); dayOpen = null; }
+function setAdj(v) {
+  const md = monthData(true); const rec = md.days[dayOpen]; if (!rec) return;
+  rec.adj = Math.round(num(v) || 0); $('adjInput').value = rec.adj; save(); renderMonth();
+}
+$('adjMinus').onclick = () => setAdj((num($('adjInput').value) || 0) - 30);
+$('adjPlus').onclick = () => setAdj((num($('adjInput').value) || 0) + 30);
+$('adjInput').onchange = e => setAdj(e.target.value);
+$('dayClose').onclick = closeDay;
+$('dayOverlay').onclick = e => { if (e.target.id === 'dayOverlay') closeDay(); };
+
+function rows(tbl, list) {
+  $(tbl).innerHTML = list.map(([a, b, cls]) => `<tr class="${cls || ''}"><td>${a}</td><td>${b}</td></tr>`).join('');
+}
+function renderMonth() {
+  const S = state.settings;
+  $('setupWarn').classList.toggle('hidden', !!num(S.wage));
+  $('mLabel').textContent = `${cur.y}年${cur.m}月の勤務`;
+  const py = cur.m === 12 ? cur.y + 1 : cur.y, pm = cur.m === 12 ? 1 : cur.m + 1;
+  $('payLabel').textContent = `振込は ${pm}月${num(S.payDay) || 10}日`;
+  renderPalette(); renderCal();
+  const k = ymKey(cur.y, cur.m);
+  const r = calcMonth(k);
+  const md = state.months[k] || {};
+  $('kaikin').checked = r.kaikinOn;
+  $('netBig').textContent = yen(r.net);
+  $('netSub').textContent = `総支給 ${yen(r.gross)} − 引かれる額 ${yen(r.dedTotal)}`;
+  rows('hoursTable', [
+    ['出勤日数', r.days + '日'], ['働いた時間（休憩を除く）', hm(r.work)],
+    ['うち残業（1日8時間を超えた分）', hm(r.ot)], ['うち深夜（22時〜翌5時）', hm(r.night)],
+    ...(r.unknown ? [['設定にない勤務名', r.unknown + '日（計算に入っていません）']] : []),
+  ]);
+  rows('payTable', [
+    [`ふだんの時給分（${yen(num(S.wage) || 0)}×時間）`, yen(r.pay.normal)],
+    [`残業代（${yen(r.otRate)}×時間）`, yen(r.pay.overtime)],
+    [`深夜の上乗せ（${yen(r.nightAdd)}×時間）`, yen(r.pay.night)],
+    ['皆勤手当', yen(r.pay.kaikin)],
+    ['交通費', yen(r.pay.commute)],
+    ['総支給', yen(r.gross), 'total'],
+  ]);
+  rows('dedTable', [
+    ['健康保険' + (r.healthAuto ? '（目安）' : ''), yen(r.ded.health)],
+    ['厚生年金' + (r.pensionAuto ? '（目安）' : ''), yen(r.ded.pension)],
+    ['雇用保険', yen(r.ded.emp)],
+    ['所得税', yen(r.ded.tax)],
+    ['住民税', yen(r.ded.resident)],
+    ['合計', yen(r.dedTotal), 'total'],
+  ]);
+  const notes = [];
+  if (r.healthAuto || r.pensionAuto) notes.push('健康保険・厚生年金は給与明細の額を「設定」に入れると正確になります。');
+  if (num(S.residentTax) === null) notes.push('住民税が明細で引かれていれば「設定」に入れてください。');
+  notes.push('週40時間を超えた分の残業や休日出勤の割増は計算に入れていません。');
+  $('dedNote').textContent = notes.join(' ');
+  $('actualNet').value = md.actualNet ?? '';
+  const act = num(md.actualNet);
+  $('diffNote').textContent = act === null ? '明細の「差引支給額」を入れると、目安との差を表示します。'
+    : `目安との差：${act - r.net >= 0 ? '+' : ''}${yen(act - r.net)}`;
+}
+$('kaikin').onchange = e => { monthData(true).kaikin = e.target.checked; save(); renderMonth(); };
+$('actualNet').onchange = e => { monthData(true).actualNet = num(e.target.value); save(); renderMonth(); };
+$('prevM').onclick = () => { cur.m--; if (cur.m < 1) { cur.m = 12; cur.y--; } renderMonth(); };
+$('nextM').onclick = () => { cur.m++; if (cur.m > 12) { cur.m = 1; cur.y++; } renderMonth(); };
+$('clearMonth').onclick = () => {
+  if (!confirm(`${cur.y}年${cur.m}月の勤務をすべて消しますか？`)) return;
+  delete state.months[ymKey(cur.y, cur.m)]; save(); renderMonth();
+};
+
+function renderHistory() {
+  const keys = Object.keys(state.months).filter(k => Object.keys(state.months[k].days || {}).length).sort().reverse();
+  if (!keys.length) { $('histTable').innerHTML = '<tr><td class="muted">まだ記録がありません</td><td></td></tr>'; return; }
+  $('histTable').innerHTML = '<tr><td class="muted">勤務した月</td><td class="muted">総支給／手取り目安／実際</td></tr>' + keys.map(k => {
+    const r = calcMonth(k); const [y, m] = k.split('-').map(Number); const act = num(state.months[k].actualNet);
+    return `<tr><td>${y}年${m}月<br><span class="muted">${r.days}日・${hm(r.work)}</span></td><td>${yen(r.gross)}<br><b>${yen(r.net)}</b><br><span class="muted">${act === null ? '—' : yen(act)}</span></td></tr>`;
+  }).join('');
+}
+
+// ===================== 設定 =====================
+function renderSettings() {
+  document.querySelectorAll('[data-k]').forEach(inp => { const v = state.settings[inp.dataset.k]; inp.value = v ?? ''; });
+  const box = $('shiftEdit'); box.innerHTML = '';
+  state.settings.shifts.forEach((s, i) => {
+    const row = document.createElement('div'); row.className = 'shift-edit';
+    const info = calcShift(s, 0);
+    row.innerHTML = `
+      <div class="row between"><input value="${escapeHtml(s.name)}" data-f="name" aria-label="勤務名" style="width:110px; font-weight:700">
+        <button data-del="${i}" class="danger" style="min-height:36px; padding:2px 10px">削除</button></div>
+      <div class="line"><span class="lbl">始まり〜終わり</span><input type="time" value="${s.start}" data-f="start"><input type="time" value="${s.end}" data-f="end"></div>
+      <div class="line"><span class="lbl">休憩の開始・分</span><input type="time" value="${s.brStart}" data-f="brStart"><input type="number" inputmode="numeric" value="${s.brMin}" data-f="brMin"></div>
+      <div class="muted" style="margin-top:4px">働く時間 ${hm(info.work)}（残業 ${hm(info.ot)}・深夜 ${hm(info.night)}）</div>`;
+    row.querySelectorAll('[data-f]').forEach(inp => inp.onchange = () => {
+      const f = inp.dataset.f; const old = s.name;
+      s[f] = f === 'brMin' ? (num(inp.value) || 0) : inp.value;
+      if (f === 'name') for (const m of Object.values(state.months)) for (const d of Object.values(m.days || {})) if (d.s === old) d.s = s.name;
+      save(); renderSettings();
+    });
+    row.querySelector('[data-del]').onclick = () => {
+      if (!confirm(`「${s.name}」を削除しますか？（記録の中のこの勤務は計算されなくなります）`)) return;
+      state.settings.shifts.splice(i, 1); save(); renderSettings();
+    };
+    box.appendChild(row);
+  });
+}
+document.querySelectorAll('[data-k]').forEach(inp => inp.onchange = () => { state.settings[inp.dataset.k] = num(inp.value); save(); });
+$('addShift').onclick = () => { state.settings.shifts.push({ name: '新勤務', start: '09:00', end: '18:00', brStart: '12:00', brMin: 60 }); save(); renderSettings(); };
+$('exportCopy').onclick = async () => {
+  const text = JSON.stringify({ app: 'kyuyo-memo', v: 1, savedAt: new Date().toISOString(), data: state });
+  try { await navigator.clipboard.writeText(text); $('backupNote').textContent = 'コピーしました。メモアプリなどに貼り付けて保管してください。'; }
+  catch (e) { $('importBox').classList.remove('hidden'); $('importText').value = text; $('importText').select(); $('backupNote').textContent = '自動でコピーできませんでした。下の文字を全部選んでコピーしてください。'; }
+};
+$('importOpen').onclick = () => { $('importBox').classList.toggle('hidden'); $('importText').value = ''; };
+$('importDo').onclick = () => {
+  try {
+    const o = JSON.parse($('importText').value.trim());
+    if (o.app !== 'kyuyo-memo' || !o.data) throw new Error();
+    if (!confirm('今の記録と設定を、貼り付けた内容に置き換えますか？')) return;
+    state = o.data; const d = defaultState(); state.settings = Object.assign(d.settings, state.settings || {}); state.months = state.months || {};
+    save(); renderSettings(); $('backupNote').textContent = '戻しました。'; $('importBox').classList.add('hidden');
+  } catch (e) { $('backupNote').textContent = '読み込めませんでした。コピーした文字を全部貼り付けているか確認してください。'; }
+};
+$('wipeAll').onclick = () => {
+  if (!confirm('すべての記録と設定を消します。元に戻せません。よろしいですか？')) return;
+  state = defaultState(); save(); renderSettings();
+};
+
+// ===================== タブ =====================
+document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav.tabs button').forEach(x => x.classList.toggle('on', x === b));
+  for (const t of ['month', 'history', 'settings']) $('tab-' + t).classList.toggle('hidden', t !== b.dataset.tab);
+  if (b.dataset.tab === 'month') renderMonth();
+  if (b.dataset.tab === 'history') renderHistory();
+  if (b.dataset.tab === 'settings') renderSettings();
+  window.scrollTo(0, 0);
+});
+
+// ===================== スクショ読み取り（端末内で処理） =====================
+const TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+let ocrFound = null;
+function loadScript(src) {
+  return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+}
+$('ocrBtn').onclick = () => { $('ocrFile').value = ''; $('ocrFile').click(); };
+$('ocrClose').onclick = () => $('ocrOverlay').classList.remove('show');
+$('ocrFile').onchange = async e => {
+  const file = e.target.files[0]; if (!file) return;
+  $('ocrOverlay').classList.add('show'); $('ocrResultBox').classList.add('hidden');
+  const status = t => { $('ocrStatus').textContent = t; };
+  try {
+    status('準備中…（はじめての時は読み取り用のデータを取り込むので30秒ほどかかります）');
+    if (!window.Tesseract) await loadScript(TESS_URL);
+    const img = await fileToImage(file);
+    const prep = preprocess(img);
+    const worker = await Tesseract.createWorker('jpn', 1, {
+      logger: m => { if (m.status === 'recognizing text') status(`読み取り中… ${Math.round(m.progress * 100)}%`); },
+    });
+    await worker.setParameters({ tessedit_pageseg_mode: '11' });
+    const { data } = await worker.recognize(prep.canvas);
+    await worker.terminate();
+    const found = parseCalendar(data, prep);
+    showOcrResult(found);
+  } catch (err) {
+    console.error(err);
+    status('読み取れませんでした。電波のある場所で、もう一度ためしてください。');
+  }
+};
+function fileToImage(file) {
+  return new Promise((res, rej) => { const url = URL.createObjectURL(file); const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
+}
+// 色つきの予定（白文字）も読めるように、白黒の画像に作り直す
+function preprocess(img) {
+  const scale = Math.min(2, 1600 / img.naturalWidth) || 1;
+  const W = Math.round(img.naturalWidth * scale), H = Math.round(img.naturalHeight * scale);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, W, H);
+  const id = ctx.getImageData(0, 0, W, H), p = id.data;
+  const N = W * H, sat = new Uint8Array(N), lum = new Float32Array(N), satv = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const r = p[i * 4], g = p[i * 4 + 1], b = p[i * 4 + 2];
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    const s = mx === 0 ? 0 : (mx - mn) / mx;
+    satv[i] = s; lum[i] = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    sat[i] = (s > 0.3 && mx > 60) ? 1 : 0;
+  }
+  const rad = Math.max(3, Math.round(W / 180));
+  // 文字のふちの細い色にじみは消し（開く）、予定の色帯の中の白文字の穴は埋める（閉じる）
+  const r0 = Math.max(2, Math.round(W / 600));
+  const solid = dilate(erode(sat, W, H, r0), W, H, r0);
+  const chip = fillHoles(erode(dilate(solid, W, H, rad), W, H, rad), W, H);
+  // 背景が暗い（ダークモード）なら明るい文字を黒として扱う
+  let sum = 0, cnt = 0;
+  for (let i = 0; i < N; i += 7) if (!chip[i]) { sum += lum[i]; cnt++; }
+  const dark = cnt && sum / cnt < 0.45;
+  for (let i = 0; i < N; i++) {
+    let v;
+    if (chip[i]) v = (satv[i] < 0.25 && (lum[i] > 0.75 || lum[i] < 0.3)) ? 0 : 255;
+    else v = (dark ? lum[i] > 0.5 : lum[i] < 0.55) ? 0 : 255;
+    p[i * 4] = p[i * 4 + 1] = p[i * 4 + 2] = v; p[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(id, 0, 0);
+  return { canvas: c, W, H, chip };
+}
+function morph(src, W, H, r, isMax) {
+  const tmp = new Uint8Array(W * H), out = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) {
+    const o = y * W;
+    for (let x = 0; x < W; x++) {
+      let v = isMax ? 0 : 1;
+      if (!isMax && (x - r < 0 || x + r >= W)) v = 0; // 画面の端は「外側」として扱う
+      else for (let k = Math.max(0, x - r), e = Math.min(W - 1, x + r); k <= e; k++) { const s = src[o + k]; if (isMax ? s : !s) { v = isMax ? 1 : 0; break; } }
+      tmp[o + x] = v;
+    }
+  }
+  for (let x = 0; x < W; x++) {
+    for (let y = 0; y < H; y++) {
+      let v = isMax ? 0 : 1;
+      if (!isMax && (y - r < 0 || y + r >= H)) v = 0;
+      else for (let k = Math.max(0, y - r), e = Math.min(H - 1, y + r); k <= e; k++) { const s = tmp[k * W + x]; if (isMax ? s : !s) { v = isMax ? 1 : 0; break; } }
+      out[y * W + x] = v;
+    }
+  }
+  return out;
+}
+// 色帯に囲まれた穴（白文字の部分）を埋める：画面の端からつながっていない白い部分を色帯に含める
+function fillHoles(m, W, H) {
+  const N = W * H, seen = new Uint8Array(N), q = new Int32Array(N);
+  let h = 0, t = 0;
+  const push = i => { if (!m[i] && !seen[i]) { seen[i] = 1; q[t++] = i; } };
+  for (let x = 0; x < W; x++) { push(x); push((H - 1) * W + x); }
+  for (let y = 0; y < H; y++) { push(y * W); push(y * W + W - 1); }
+  while (h < t) {
+    const i = q[h++], x = i % W;
+    if (x > 0) push(i - 1); if (x < W - 1) push(i + 1);
+    if (i >= W) push(i - W); if (i < N - W) push(i + W);
+  }
+  const out = new Uint8Array(N);
+  for (let i = 0; i < N; i++) out[i] = (m[i] || !seen[i]) ? 1 : 0;
+  return out;
+}
+const dilate = (s, W, H, r) => morph(s, W, H, r, true);
+const erode = (s, W, H, r) => morph(s, W, H, r, false);
+
+function toHalf(s) {
+  return s.replace(/[０-９Ａ-Ｚａ-ｚ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[Ｉｌ|｜]/g, '1');
+}
+function collectWords(data) {
+  const out = [];
+  const lines = [];
+  for (const b of data.blocks || []) for (const pa of b.paragraphs || []) for (const l of pa.lines || []) lines.push(l);
+  if (!lines.length && data.lines) lines.push(...data.lines);
+  for (const l of lines) out.push((l.words || []).map(w => ({ text: toHalf((w.text || '').trim()), bbox: w.bbox })).filter(w => w.text));
+  return out; // 行ごとの単語リスト
+}
+function parseCalendar(data, prep) {
+  const lines = collectWords(data);
+  const shifts = state.settings.shifts;
+  // 勤務名の頭文字（1, 2, 3, A, B など）で見分ける
+  const heads = shifts.map(s => toHalf(s.name).toUpperCase());
+  const dayNums = [], labels = [];
+  // 予定の色帯（横に長い）の中にあるか
+  const inWideChip = bb => {
+    const y = Math.round((bb.y0 + bb.y1) / 2), x = Math.round((bb.x0 + bb.x1) / 2), o = y * prep.W;
+    if (!prep.chip[o + x]) return false;
+    let a = x, z = x;
+    while (a > 0 && prep.chip[o + a - 1]) a--;
+    while (z < prep.W - 1 && prep.chip[o + z + 1]) z++;
+    return (z - a) > prep.W / 7 * 0.45;
+  };
+  for (const words of lines) {
+    let str = '', map = [];
+    words.forEach((w, wi) => { if (str) { str += ' '; map.push(-1); } for (const ch of w.text) { str += ch; map.push(wi); } });
+    const U = str.toUpperCase();
+    // 勤務名をさがす（読み間違えやすい字も許す）
+    const usedWords = new Set();
+    for (let si = 0; si < shifts.length; si++) {
+      const chars = [...heads[si]];
+      const src = chars.map((c, i) => {
+        if (c === '勤' && i === chars.length - 1) return '[勤動勧勒勘効勁]';
+        if (c === '1') return '[1IL]';
+        if (c === 'B') return '[B8]';
+        return c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      }).join('\\s?');
+      const re = new RegExp(src, 'g');
+      let mm;
+      while ((mm = re.exec(U))) {
+        const ws = new Set(); for (let k = mm.index; k < mm.index + mm[0].length; k++) if (map[k] >= 0) ws.add(map[k]);
+        ws.forEach(i => usedWords.add(i));
+        const bbs = [...ws].map(i => words[i].bbox);
+        const bb = { x0: Math.min(...bbs.map(b => b.x0)), y0: Math.min(...bbs.map(b => b.y0)), x1: Math.max(...bbs.map(b => b.x1)), y1: Math.max(...bbs.map(b => b.y1)) };
+        labels.push({ name: shifts[si].name, bb });
+      }
+    }
+    // 「勤」が読めなくても、色帯の中の先頭の1文字（1・2・3・A・B）で見分ける
+    words.forEach((w, wi) => {
+      if (usedWords.has(wi) || !inWideChip(w.bbox)) return;
+      let c = w.text[0].toUpperCase();
+      if ('IL|^'.includes(c)) c = '1';
+      let hit = shifts.filter((s, si) => heads[si][0] === c);
+      if (!hit.length && c === '8') hit = shifts.filter((s, si) => heads[si][0] === 'B');
+      if (hit.length !== 1) return;
+      usedWords.add(wi);
+      labels.push({ name: hit[0].name, bb: w.bbox });
+    });
+    // 日付の数字（予定の色帯の中のものは除く。今日の丸印は細いので除かない）
+    words.forEach((w, wi) => {
+      const next = (words[wi + 1] || {}).text || '';
+      if (/^\d{1,2}月/.test(w.text) || (/^\d{1,2}$/.test(w.text) && /^[月年]/.test(next))) return; // 見出しの「10月」などは日付ではない
+      if (!usedWords.has(wi) && !inWideChip(w.bbox) && /^\d{1,2}$/.test(w.text) && +w.text >= 1 && +w.text <= 31) dayNums.push({ v: +w.text, bb: w.bbox });
+    });
+  }
+  // 日付を行→列の順に並べ、前月・翌月の分を見分ける
+  dayNums.sort((a, b) => (a.bb.y0 - b.bb.y0) || (a.bb.x0 - b.bb.x0));
+  const rowsArr = [];
+  for (const d of dayNums) {
+    const h = d.bb.y1 - d.bb.y0;
+    const r = rowsArr.find(r => Math.abs(r.y - d.bb.y0) < h * 0.8);
+    if (r) r.items.push(d); else rowsArr.push({ y: d.bb.y0, items: [d] });
+  }
+  const ordered = [];
+  rowsArr.sort((a, b) => a.y - b.y).forEach(r => r.items.sort((a, b) => a.bb.x0 - b.bb.x0).forEach(d => ordered.push(d)));
+  let offset = ordered.length && ordered[0].v > 20 ? -1 : 0, prev = null;
+  for (const d of ordered) {
+    if (prev !== null && d.v < prev - 3) offset++;
+    d.month = offset; prev = d.v;
+  }
+  // 横7列のマス目として、勤務の列と、同じ段の読めた日付から日にちを割り出す
+  const colW = prep.W / 7;
+  const colOf = bb => Math.min(6, Math.floor(((bb.x0 + bb.x1) / 2) / colW));
+  const last = new Date(cur.y, cur.m, 0).getDate(), prevLast = new Date(cur.y, cur.m - 1, 0).getDate();
+  const serial = d => d.month < 0 ? d.v - prevLast : d.month > 0 ? last + d.v : d.v;
+  const rowList = [];
+  for (const d of ordered) {
+    const r = rowList.find(r => Math.abs(r.y - d.bb.y0) < (d.bb.y1 - d.bb.y0) * 0.8);
+    if (r) r.items.push(d); else rowList.push({ y: d.bb.y0, items: [d] });
+  }
+  const gaps = rowList.slice(1).map((r, i) => r.y - rowList[i].y).sort((a, b) => a - b);
+  const rowGap = gaps.length ? gaps[Math.floor(gaps.length / 2)] : prep.H;
+  const result = {};
+  for (const l of labels) {
+    let row = null;
+    for (const r of rowList) if (r.y <= l.bb.y0 + 4 && l.bb.y0 - r.y < rowGap * 0.9) row = r;
+    if (!row) continue;
+    const c = colOf(l.bb);
+    // 同じ段で、いちばん近い列の日付を基準にする
+    const ref = row.items.slice().sort((a, b) => Math.abs(colOf(a.bb) - c) - Math.abs(colOf(b.bb) - c))[0];
+    const day = serial(ref) + (c - colOf(ref.bb));
+    if (day >= 1 && day <= last && !result[day]) result[day] = l.name;
+  }
+  window.__ocrDebug = { labels, days: ordered };
+  // 1日がどの列にあるか（選んだ月と合っているかの確認用）
+  const votes = [0, 0, 0, 0, 0, 0, 0];
+  for (const d of ordered) if (d.month === 0) votes[(((colOf(d.bb) - (d.v - 1)) % 7) + 7) % 7]++;
+  const best = Math.max(...votes);
+  return { days: result, firstCol: best > 0 ? votes.indexOf(best) : null };
+}
+function showOcrResult(res) {
+  const found = res.days;
+  const wd1 = new Date(cur.y, cur.m - 1, 1).getDay();
+  ocrFound = found;
+  const ds = Object.keys(found).map(Number).sort((a, b) => a - b);
+  const last = new Date(cur.y, cur.m, 0).getDate();
+  if (!ds.length) {
+    $('ocrStatus').textContent = '勤務が見つかりませんでした。Googleカレンダーを「月」表示にしたスクショで、もう一度ためしてください。';
+    return;
+  }
+  $('ocrStatus').textContent = `${cur.y}年${cur.m}月として、${ds.length}日分の勤務が見つかりました。` +
+    (res.firstCol !== null && ![wd1, (wd1 + 6) % 7].includes(res.firstCol) ? '（注意：スクショの月と、いま選んでいる月が違うようです。月を合わせてから読み込んでください）' : '');
+  $('ocrList').innerHTML = ds.filter(d => d <= last).map(d => `${cur.m}月${d}日：<b>${escapeHtml(found[d])}</b>`).join('<br>');
+  $('ocrResultBox').classList.remove('hidden');
+}
+$('ocrApply').onclick = () => {
+  const md = monthData(true); const last = new Date(cur.y, cur.m, 0).getDate();
+  for (const [d, name] of Object.entries(ocrFound || {})) if (+d <= last) md.days[d] = { s: name, adj: md.days[d]?.s === name ? (md.days[d].adj || 0) : 0 };
+  save(); $('ocrOverlay').classList.remove('show'); renderMonth();
+};
+
+// ===================== 起動 =====================
+paint = state.settings.shifts[0]?.name ?? null;
+renderMonth();
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
